@@ -41,7 +41,7 @@ neighborhood_socioeconomic/
 ### 1. Install Python packages
 
 ```
-pip install pandas requests beautifulsoup4 geopy python-dotenv census
+pip install pandas requests beautifulsoup4 geopy python-dotenv
 ```
 
 ### 2. Add your Census API key
