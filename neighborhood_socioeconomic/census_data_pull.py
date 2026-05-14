@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from census import Census
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,8 +10,6 @@ CENSUS_API_KEY = os.environ["CENSUS_API_KEY"]
 INPUT_FILE = "../data/mosques_scores.csv"
 OUTPUT_FILE = "../data/mosques_socioeconomic.csv"
 YEAR = 2024 # Using 2024 ACS 5-Year estimates (most recent data)
-
-c = Census(CENSUS_API_KEY)
 
 print("Loading dataset")
 df = pd.read_csv(INPUT_FILE, dtype={'Mosque_ID': str, 'ZCTA': str})
@@ -28,12 +26,25 @@ df['ZCTA'] = df['ZCTA'].apply(
 variables = ['NAME', 'B19013_001E', 'B17001_002E', 'B17001_001E', 'B25010_001E']
 
 print("Fetching Census Data (ACS 5-Year)")
-census_data = c.acs5.get(variables, geo={'for': 'zip code tabulation area:*'}, year=YEAR)
 
-census_df = pd.DataFrame(census_data)
+url = f"https://api.census.gov/data/{YEAR}/acs/acs5"
+params = {
+    "get": "NAME,B19013_001E,B17001_002E,B17001_001E,B25010_001E",
+    "for": "zip code tabulation area:*",
+    "key": CENSUS_API_KEY
+}
+response = requests.get(url, params=params)
+response.raise_for_status()
+rows = response.json()
+header, data = rows[0], rows[1:]
+census_df = pd.DataFrame(data, columns=header)
 
-census_df['Household_Income'] = census_df['B19013_001E']
-census_df['Household_Size'] = census_df['B25010_001E']
+census_df['HH_Income'] = census_df['B19013_001E']
+census_df['HH_Size'] = census_df['B25010_001E']
+census_df['B17001_002E'] = pd.to_numeric(census_df['B17001_002E'])
+census_df['B17001_001E'] = pd.to_numeric(census_df['B17001_001E'])
+census_df['B19013_001E'] = pd.to_numeric(census_df['B19013_001E'])
+census_df['B25010_001E'] = pd.to_numeric(census_df['B25010_001E'])
 
 # Calculate Poverty Rate: (People Below Poverty / Total People) * 100
 census_df['Poverty_Rate'] = census_df.apply(
@@ -42,9 +53,9 @@ census_df['Poverty_Rate'] = census_df.apply(
 )
 
 census_df['ZCTA'] = census_df['zip code tabulation area']
-census_final = census_df[['ZCTA', 'Household_Income', 'Poverty_Rate', 'Household_Size']]
+census_final = census_df[['ZCTA', 'HH_Income', 'Poverty_Rate', 'HH_Size']]
 merged_df = pd.merge(df, census_final, on='ZCTA', how='left')
 
 merged_df.to_csv(OUTPUT_FILE, index=False)
 print(f"Saved to {OUTPUT_FILE}")
-print(merged_df[['ZCTA', 'Household_Income', 'Poverty_Rate', 'Household_Size']].head())
+print(merged_df[['ZCTA', 'HH_Income', 'Poverty_Rate', 'HH_Size']].head())
